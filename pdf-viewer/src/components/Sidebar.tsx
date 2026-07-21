@@ -12,6 +12,7 @@ interface SidebarProps {
   tree: TreeNode[];
   selectedFile: string | null;
   onSelectFile: (path: string) => void;
+  width?: number;
 }
 
 const TreeNodeItem: React.FC<{
@@ -73,9 +74,12 @@ const TreeNodeItem: React.FC<{
   );
 };
 
-export const Sidebar: React.FC<SidebarProps> = ({ tree, selectedFile, onSelectFile }) => {
+export const Sidebar: React.FC<SidebarProps> = ({ tree, selectedFile, onSelectFile, width }) => {
   return (
-    <aside className="sidebar">
+    <aside 
+      className="sidebar" 
+      style={width ? { width: `${width}px`, minWidth: `${width}px` } : undefined}
+    >
       <div className="sidebar-header">
         <BookOpen size={24} color="#60a5fa" />
         <h1>Study Materials</h1>

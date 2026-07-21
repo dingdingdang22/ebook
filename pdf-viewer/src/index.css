@@ -191,3 +191,36 @@ body {
   height: 64px;
   color: var(--glass-border);
 }
+
+.resizer {
+  width: 5px;
+  cursor: col-resize;
+  background: transparent;
+  position: relative;
+  z-index: 20;
+  transition: background 0.2s ease;
+}
+
+.resizer:hover, .resizer:active {
+  background: var(--accent);
+}
+
+.sidebar-toggle {
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6px;
+  margin-right: 16px;
+  border-radius: 6px;
+  transition: all 0.2s ease;
+}
+
+.sidebar-toggle:hover {
+  background: var(--hover-bg);
+  color: var(--text-main);
+}
+

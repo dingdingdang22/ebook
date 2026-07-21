@@ -1,11 +1,15 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Sidebar } from './components/Sidebar';
 import type { TreeNode } from './components/Sidebar';
 import { PdfViewer } from './components/PdfViewer';
+import { PanelLeft, PanelLeftClose } from 'lucide-react';
 import treeData from './tree.json';
 
 function App() {
   const [selectedFile, setSelectedFile] = useState<string | null>(null);
+  const [sidebarWidth, setSidebarWidth] = useState(350);
+  const [isSidebarVisible, setIsSidebarVisible] = useState(true);
+  const [isResizing, setIsResizing] = useState(false);
   
   // On mount, check if there's a file in URL params
   useEffect(() => {
@@ -24,15 +28,56 @@ function App() {
     window.history.pushState({}, '', url);
   };
 
+  const startResizing = useCallback(() => {
+    setIsResizing(true);
+  }, []);
+
+  const stopResizing = useCallback(() => {
+    setIsResizing(false);
+  }, []);
+
+  const resize = useCallback((e: MouseEvent) => {
+    if (isResizing) {
+      // Limit sidebar width between 200px and 800px
+      setSidebarWidth(Math.max(200, Math.min(e.clientX, 800)));
+    }
+  }, [isResizing]);
+
+  useEffect(() => {
+    if (isResizing) {
+      window.addEventListener('mousemove', resize);
+      window.addEventListener('mouseup', stopResizing);
+    } else {
+      window.removeEventListener('mousemove', resize);
+      window.removeEventListener('mouseup', stopResizing);
+    }
+    return () => {
+      window.removeEventListener('mousemove', resize);
+      window.removeEventListener('mouseup', stopResizing);
+    };
+  }, [isResizing, resize, stopResizing]);
+
+  const toggleSidebar = () => setIsSidebarVisible(!isSidebarVisible);
+
   return (
-    <div className="app-container">
-      <Sidebar 
-        tree={treeData as TreeNode[]} 
-        selectedFile={selectedFile} 
-        onSelectFile={handleSelectFile} 
-      />
-      <main className="main-content">
+    <div className="app-container" style={{ cursor: isResizing ? 'col-resize' : 'default' }}>
+      {isSidebarVisible && (
+        <>
+          <Sidebar 
+            tree={treeData as TreeNode[]} 
+            selectedFile={selectedFile} 
+            onSelectFile={handleSelectFile} 
+            width={sidebarWidth}
+          />
+          <div className="resizer" onMouseDown={startResizing} />
+        </>
+      )}
+      <main className="main-content" style={{ pointerEvents: isResizing ? 'none' : 'auto' }}>
         <div className="top-bar">
+          <button onClick={toggleSidebar} className="sidebar-toggle" title="Toggle Sidebar">
+            {isSidebarVisible ? <PanelLeftClose size={20} /> : <PanelLeft size={20} />}
+          </button>
+          
           {selectedFile ? (
             <div className="breadcrumb">
               {selectedFile.split('/').filter(Boolean).map((segment, index, arr) => (
