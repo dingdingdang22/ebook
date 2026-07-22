@@ -2,6 +2,7 @@ import React, { useEffect, useState, useRef } from 'react';
 import { BookX, DownloadCloud, Zap, AlertCircle } from 'lucide-react';
 import { fetchAndCachePdf, isPdfCached } from '../services/cacheService';
 import { TxtViewer } from './TxtViewer';
+import { PdfCanvasViewer } from './PdfCanvasViewer';
 
 interface PdfViewerProps {
   filePath: string | null;
@@ -147,11 +148,7 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({ filePath, onCacheUpdate })
         isTextDoc ? (
           <TxtViewer blobUrl={blobUrl} filePath={filePath} />
         ) : (
-          <iframe
-            src={blobUrl}
-            className="pdf-iframe"
-            title="PDF Viewer"
-          />
+          <PdfCanvasViewer blobUrl={blobUrl} filePath={filePath} />
         )
       )}
     </div>
