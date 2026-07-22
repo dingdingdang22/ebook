@@ -36,6 +36,7 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({ filePath, onCacheUpdate })
     }
 
     let isSubscribed = true;
+    const controller = new AbortController();
 
     const loadDoc = async () => {
       setLoading(true);
@@ -49,11 +50,15 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({ filePath, onCacheUpdate })
       }
 
       try {
-        const url = await fetchAndCachePdf(filePath, (progress) => {
-          if (isSubscribed) {
-            setDownloadProgress(progress);
-          }
-        });
+        const url = await fetchAndCachePdf(
+          filePath,
+          (progress) => {
+            if (isSubscribed) {
+              setDownloadProgress(progress);
+            }
+          },
+          controller.signal
+        );
 
         if (isSubscribed) {
           prevObjectUrlRef.current = url;
@@ -64,7 +69,7 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({ filePath, onCacheUpdate })
           }
         }
       } catch (err: any) {
-        if (isSubscribed) {
+        if (isSubscribed && err.name !== 'AbortError') {
           console.error('Failed to load document:', err);
           setError(err.message || '加载电子书文档失败，请检查网络或路径');
           setLoading(false);
@@ -76,8 +81,9 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({ filePath, onCacheUpdate })
 
     return () => {
       isSubscribed = false;
+      controller.abort();
     };
-  }, [filePath]);
+  }, [filePath, onCacheUpdate]);
 
   if (!filePath) {
     return (

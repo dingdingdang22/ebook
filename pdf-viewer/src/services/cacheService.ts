@@ -89,10 +89,12 @@ export async function getStorageStats(): Promise<StorageStats> {
 
 // Helper: Normalize file path to URL
 export function normalizePathToUrl(filePath: string): string {
-  if (filePath.startsWith('http://') || filePath.startsWith('https://')) {
-    return filePath;
+  // Strip #hash anchors (like #page=177) to ensure unique cache keys
+  const pathWithoutHash = filePath.split('#')[0];
+  if (pathWithoutHash.startsWith('http://') || pathWithoutHash.startsWith('https://')) {
+    return pathWithoutHash;
   }
-  const cleanPath = filePath.startsWith('/') ? filePath : '/' + filePath;
+  const cleanPath = pathWithoutHash.startsWith('/') ? pathWithoutHash : '/' + pathWithoutHash;
   return cleanPath.split('/').map(segment => encodeURIComponent(segment)).join('/');
 }
 
@@ -135,10 +137,14 @@ export function getMimeType(filePath: string): string {
   return 'application/octet-stream';
 }
 
+// Map to track in-flight fetch tasks for deduplication
+const inFlightFetches = new Map<string, Promise<string>>();
+
 // Download and cache PDF/TXT/MD with optional progress callback
 export async function fetchAndCachePdf(
   filePath: string,
-  onProgress?: (progress: { loaded: number; total: number; percentage: number }) => void
+  onProgress?: (progress: { loaded: number; total: number; percentage: number }) => void,
+  signal?: AbortSignal
 ): Promise<string> {
   const url = normalizePathToUrl(filePath);
   const mimeType = getMimeType(filePath);
@@ -156,64 +162,85 @@ export async function fetchAndCachePdf(
     }
   }
 
-  // Fetch with progress tracking
-  const response = await fetch(url);
-  if (!response.ok) {
-    throw new Error(`HTTP error! status: ${response.status}`);
+  // Deduplication check: return existing fetch promise if already inflight
+  const existingTask = inFlightFetches.get(url);
+  if (existingTask) {
+    return existingTask;
   }
 
-  const contentLength = response.headers.get('content-length');
-  const total = contentLength ? parseInt(contentLength, 10) : 0;
+  const fetchTask = (async () => {
+    // Fetch with progress tracking and abort support
+    const response = await fetch(url, { signal });
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
 
-  let loaded = 0;
-  const reader = response.body?.getReader();
-  const chunks: Uint8Array[] = [];
+    const contentLength = response.headers.get('content-length');
+    const total = contentLength ? parseInt(contentLength, 10) : 0;
 
-  if (reader) {
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      if (value) {
-        chunks.push(value);
-        loaded += value.length;
-        if (onProgress) {
-          const percentage = total > 0 ? Math.round((loaded / total) * 100) : 0;
-          onProgress({ loaded, total, percentage });
+    let loaded = 0;
+    const reader = response.body?.getReader();
+    const chunks: Uint8Array[] = [];
+
+    if (reader) {
+      while (true) {
+        // Check for cancellation before each read
+        if (signal?.aborted) {
+          await reader.cancel();
+          throw new DOMException('Download aborted', 'AbortError');
+        }
+        const { done, value } = await reader.read();
+        if (done) break;
+        if (value) {
+          chunks.push(value);
+          loaded += value.length;
+          if (onProgress) {
+            const percentage = total > 0 ? Math.round((loaded / total) * 100) : 0;
+            onProgress({ loaded, total, percentage });
+          }
         }
       }
     }
-  }
 
-  // Create combined Blob
-  const blob = new Blob(chunks as BlobPart[], { type: mimeType });
+    // Create combined Blob
+    const blob = new Blob(chunks as BlobPart[], { type: mimeType });
 
-  // Store in CacheStorage
-  if ('caches' in window) {
-    try {
-      const cache = await caches.open(CACHE_NAME);
-      const headers = new Headers();
-      headers.append('content-type', mimeType);
-      headers.append('content-length', blob.size.toString());
-      const responseToCache = new Response(blob, {
-        status: 200,
-        statusText: 'OK',
-        headers
-      });
-      await cache.put(url, responseToCache);
+    // Store in CacheStorage
+    if ('caches' in window) {
+      try {
+        const cache = await caches.open(CACHE_NAME);
+        const headers = new Headers();
+        headers.append('content-type', mimeType);
+        headers.append('content-length', blob.size.toString());
+        const responseToCache = new Response(blob, {
+          status: 200,
+          statusText: 'OK',
+          headers
+        });
+        await cache.put(url, responseToCache);
 
-      // Save metadata to IndexedDB
-      await saveMeta({
-        path: filePath,
-        name: filePath.split('/').pop() || filePath,
-        size: blob.size,
-        cachedAt: Date.now()
-      });
-    } catch (e) {
-      console.warn('Failed to write to CacheStorage:', e);
+        // Save metadata to IndexedDB
+        await saveMeta({
+          path: filePath,
+          name: filePath.split('/').pop() || filePath,
+          size: blob.size,
+          cachedAt: Date.now()
+        });
+      } catch (e) {
+        console.warn('Failed to write to CacheStorage:', e);
+      }
     }
-  }
 
-  return URL.createObjectURL(blob);
+    return URL.createObjectURL(blob);
+  })();
+
+  inFlightFetches.set(url, fetchTask);
+
+  try {
+    return await fetchTask;
+  } finally {
+    inFlightFetches.delete(url);
+  }
 }
 
 // Save metadata to IndexedDB
