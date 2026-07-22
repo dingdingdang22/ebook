@@ -2,23 +2,53 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { Sidebar } from './components/Sidebar';
 import type { TreeNode } from './components/Sidebar';
 import { PdfViewer } from './components/PdfViewer';
-import { PanelLeft, PanelLeftClose } from 'lucide-react';
+import { StorageModal } from './components/StorageModal';
+import { PanelLeft, PanelLeftClose, HardDrive, ShieldCheck } from 'lucide-react';
 import treeData from './tree.json';
+import { 
+  requestStoragePersistence, 
+  getStorageStats, 
+  getAllCachedPaths, 
+  type StorageStats 
+} from './services/cacheService';
 
 function App() {
   const [selectedFile, setSelectedFile] = useState<string | null>(null);
   const [sidebarWidth, setSidebarWidth] = useState(350);
   const [isSidebarVisible, setIsSidebarVisible] = useState(true);
   const [isResizing, setIsResizing] = useState(false);
-  
-  // On mount, check if there's a file in URL params
+
+  // Storage & Cache management states
+  const [isStorageModalOpen, setIsStorageModalOpen] = useState(false);
+  const [storageStats, setStorageStats] = useState<StorageStats | null>(null);
+  const [cachedPathsSet, setCachedPathsSet] = useState<Set<string>>(new Set());
+
+  const refreshStorageState = useCallback(async () => {
+    try {
+      const stats = await getStorageStats();
+      const paths = await getAllCachedPaths();
+      setStorageStats(stats);
+      setCachedPathsSet(new Set(paths));
+    } catch (e) {
+      console.error('Failed to update storage state:', e);
+    }
+  }, []);
+
+  // On mount: auto-request persistent storage and load stats
   useEffect(() => {
+    const init = async () => {
+      await requestStoragePersistence();
+      await refreshStorageState();
+    };
+    init();
+
+    // Check if there's a file in URL params
     const params = new URLSearchParams(window.location.search);
     const file = params.get('file');
     if (file) {
       setSelectedFile(file);
     }
-  }, []);
+  }, [refreshStorageState]);
 
   // Sync state to URL without reloading
   const handleSelectFile = (path: string) => {
@@ -38,7 +68,6 @@ function App() {
 
   const resize = useCallback((e: MouseEvent) => {
     if (isResizing) {
-      // Limit sidebar width between 200px and 800px
       setSidebarWidth(Math.max(200, Math.min(e.clientX, 800)));
     }
   }, [isResizing]);
@@ -59,6 +88,14 @@ function App() {
 
   const toggleSidebar = () => setIsSidebarVisible(!isSidebarVisible);
 
+  const formatSize = (bytes: number) => {
+    if (bytes === 0) return '0 B';
+    const k = 1024;
+    const sizes = ['B', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+  };
+
   return (
     <div className="app-container" style={{ cursor: isResizing ? 'col-resize' : 'default' }}>
       {isSidebarVisible && (
@@ -66,6 +103,7 @@ function App() {
           <Sidebar 
             tree={treeData as TreeNode[]} 
             selectedFile={selectedFile} 
+            cachedPaths={cachedPathsSet}
             onSelectFile={handleSelectFile} 
             width={sidebarWidth}
           />
@@ -88,11 +126,36 @@ function App() {
               ))}
             </div>
           ) : (
-            <span>Welcome to Study Materials Viewer</span>
+            <span className="welcome-text">欢迎使用学习材料阅读器</span>
           )}
+
+          {/* Storage Widget Button */}
+          <button 
+            className={`storage-widget-btn ${storageStats?.isPersisted ? 'persisted' : ''}`}
+            onClick={() => setIsStorageModalOpen(true)}
+            title="点击管理本地持久缓存"
+          >
+            <HardDrive size={16} />
+            <span>
+              {storageStats ? `${formatSize(storageStats.usedBytes)} (${storageStats.fileCount}本已离线)` : '存储加载中'}
+            </span>
+            {storageStats?.isPersisted && (
+              <span title="持久化存储保护中" style={{ display: 'inline-flex', alignItems: 'center' }}>
+                <ShieldCheck size={14} color="#10b981" />
+              </span>
+            )}
+          </button>
         </div>
-        <PdfViewer filePath={selectedFile} />
+
+        <PdfViewer filePath={selectedFile} onCacheUpdate={refreshStorageState} />
       </main>
+
+      {/* Storage Management Modal */}
+      <StorageModal 
+        isOpen={isStorageModalOpen}
+        onClose={() => setIsStorageModalOpen(false)}
+        onCacheChange={refreshStorageState}
+      />
     </div>
   );
 }

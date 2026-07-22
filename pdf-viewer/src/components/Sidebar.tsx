@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ChevronRight, ChevronDown, FileText, Folder, FolderOpen, BookOpen } from 'lucide-react';
+import { ChevronRight, ChevronDown, FileText, Folder, FolderOpen, BookOpen, CheckCircle } from 'lucide-react';
 
 export type TreeNode = {
   type: 'directory' | 'file';
@@ -11,6 +11,7 @@ export type TreeNode = {
 interface SidebarProps {
   tree: TreeNode[];
   selectedFile: string | null;
+  cachedPaths?: Set<string>;
   onSelectFile: (path: string) => void;
   width?: number;
 }
@@ -19,11 +20,13 @@ const TreeNodeItem: React.FC<{
   node: TreeNode;
   level: number;
   selectedFile: string | null;
+  cachedPaths?: Set<string>;
   onSelectFile: (path: string) => void;
-}> = ({ node, level, selectedFile, onSelectFile }) => {
+}> = ({ node, level, selectedFile, cachedPaths, onSelectFile }) => {
   const [isOpen, setIsOpen] = useState(false);
   const isSelected = selectedFile === node.path;
   const isDir = node.type === 'directory';
+  const isCached = !isDir && cachedPaths?.has(node.path);
 
   const handleClick = () => {
     if (isDir) {
@@ -47,11 +50,19 @@ const TreeNodeItem: React.FC<{
             <FileText size={16} />
           )}
         </div>
-        <span style={{ flex: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+        <span style={{ flex: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} title={node.name}>
           {node.name}
         </span>
+        
+        {/* Cached indicator */}
+        {isCached && (
+          <div className="cached-badge" title="已离线缓存（秒开）">
+            <CheckCircle size={12} color="#10b981" />
+          </div>
+        )}
+
         {isDir && (
-          <div style={{ opacity: 0.5 }}>
+          <div style={{ opacity: 0.5, marginLeft: 4 }}>
             {isOpen ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
           </div>
         )}
@@ -65,6 +76,7 @@ const TreeNodeItem: React.FC<{
               node={child} 
               level={level + 1} 
               selectedFile={selectedFile}
+              cachedPaths={cachedPaths}
               onSelectFile={onSelectFile}
             />
           ))}
@@ -74,7 +86,7 @@ const TreeNodeItem: React.FC<{
   );
 };
 
-export const Sidebar: React.FC<SidebarProps> = ({ tree, selectedFile, onSelectFile, width }) => {
+export const Sidebar: React.FC<SidebarProps> = ({ tree, selectedFile, cachedPaths, onSelectFile, width }) => {
   return (
     <aside 
       className="sidebar" 
@@ -91,6 +103,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ tree, selectedFile, onSelectFi
             node={node} 
             level={0} 
             selectedFile={selectedFile}
+            cachedPaths={cachedPaths}
             onSelectFile={onSelectFile}
           />
         ))}
