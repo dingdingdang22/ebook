@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { BookX, DownloadCloud, Zap, AlertCircle } from 'lucide-react';
 import { fetchAndCachePdf, isPdfCached } from '../services/cacheService';
+import { TxtViewer } from './TxtViewer';
 
 interface PdfViewerProps {
   filePath: string | null;
@@ -15,6 +16,9 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({ filePath, onCacheUpdate })
   const [error, setError] = useState<string | null>(null);
 
   const prevObjectUrlRef = useRef<string | null>(null);
+
+  const ext = filePath?.split('.').pop()?.toLowerCase() || '';
+  const isTextDoc = ext === 'txt' || ext === 'md';
 
   useEffect(() => {
     // Clean up previous Object URL to prevent memory leaks
@@ -32,7 +36,7 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({ filePath, onCacheUpdate })
 
     let isSubscribed = true;
 
-    const loadPdf = async () => {
+    const loadDoc = async () => {
       setLoading(true);
       setError(null);
       setDownloadProgress(null);
@@ -60,14 +64,14 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({ filePath, onCacheUpdate })
         }
       } catch (err: any) {
         if (isSubscribed) {
-          console.error('Failed to load PDF:', err);
-          setError(err.message || '加载电子书失败，请检查网络或路径');
+          console.error('Failed to load document:', err);
+          setError(err.message || '加载电子书文档失败，请检查网络或路径');
           setLoading(false);
         }
       }
     };
 
-    loadPdf();
+    loadDoc();
 
     return () => {
       isSubscribed = false;
@@ -79,7 +83,7 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({ filePath, onCacheUpdate })
       <div className="viewer-container">
         <div className="empty-state">
           <BookX className="empty-state-icon" />
-          <p>请在侧边栏选择要阅读的电子书</p>
+          <p>请在侧边栏选择要阅读的电子书文档 (PDF / TXT / Markdown)</p>
         </div>
       </div>
     );
@@ -114,7 +118,7 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({ filePath, onCacheUpdate })
       {loading && (
         <div className="loading-state">
           <div className="spinner" />
-          <p>{isInstant ? '正在从本地缓存瞬间提取...' : '正在下载并保存至本地持久缓存...'}</p>
+          <p>{isInstant ? '正在从本地缓存提取...' : '正在加载并保存至本地持久缓存...'}</p>
           {downloadProgress && downloadProgress.total > 0 && (
             <div className="progress-container">
               <div className="progress-bar-bg">
@@ -134,17 +138,21 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({ filePath, onCacheUpdate })
       {error && (
         <div className="empty-state error-state">
           <AlertCircle size={48} color="#ef4444" />
-          <p className="error-title">电子书加载失败</p>
+          <p className="error-title">文档加载失败</p>
           <p className="error-desc">{error}</p>
         </div>
       )}
 
       {!loading && !error && blobUrl && (
-        <iframe
-          src={blobUrl}
-          className="pdf-iframe"
-          title="PDF Viewer"
-        />
+        isTextDoc ? (
+          <TxtViewer blobUrl={blobUrl} filePath={filePath} />
+        ) : (
+          <iframe
+            src={blobUrl}
+            className="pdf-iframe"
+            title="PDF Viewer"
+          />
+        )
       )}
     </div>
   );

@@ -127,12 +127,21 @@ export async function getCachedPdfBlobUrl(filePath: string): Promise<string | nu
   return null;
 }
 
-// Download and cache PDF with optional progress callback
+export function getMimeType(filePath: string): string {
+  const ext = filePath.split('.').pop()?.toLowerCase();
+  if (ext === 'pdf') return 'application/pdf';
+  if (ext === 'txt') return 'text/plain; charset=utf-8';
+  if (ext === 'md') return 'text/markdown; charset=utf-8';
+  return 'application/octet-stream';
+}
+
+// Download and cache PDF/TXT/MD with optional progress callback
 export async function fetchAndCachePdf(
   filePath: string,
   onProgress?: (progress: { loaded: number; total: number; percentage: number }) => void
 ): Promise<string> {
   const url = normalizePathToUrl(filePath);
+  const mimeType = getMimeType(filePath);
 
   // Check cache first
   if ('caches' in window) {
@@ -176,14 +185,14 @@ export async function fetchAndCachePdf(
   }
 
   // Create combined Blob
-  const blob = new Blob(chunks as BlobPart[], { type: 'application/pdf' });
+  const blob = new Blob(chunks as BlobPart[], { type: mimeType });
 
   // Store in CacheStorage
   if ('caches' in window) {
     try {
       const cache = await caches.open(CACHE_NAME);
       const headers = new Headers();
-      headers.append('content-type', 'application/pdf');
+      headers.append('content-type', mimeType);
       headers.append('content-length', blob.size.toString());
       const responseToCache = new Response(blob, {
         status: 200,

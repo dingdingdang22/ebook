@@ -4,6 +4,8 @@ const path = require('path');
 const ROOT_DIR = path.resolve(__dirname, '../../');
 const OUTPUT_FILE = path.resolve(__dirname, '../src/tree.json');
 
+const SUPPORTED_EXTENSIONS = ['.pdf', '.txt', '.md'];
+
 function buildTree(dirPath, rootPath = ROOT_DIR) {
   const stats = fs.statSync(dirPath);
   const name = path.basename(dirPath);
@@ -30,12 +32,15 @@ function buildTree(dirPath, rootPath = ROOT_DIR) {
       path: relativePath,
       children
     };
-  } else if (name.toLowerCase().endsWith('.pdf')) {
-    return {
-      type: 'file',
-      name,
-      path: relativePath
-    };
+  } else {
+    const ext = path.extname(name).toLowerCase();
+    if (SUPPORTED_EXTENSIONS.includes(ext)) {
+      return {
+        type: 'file',
+        name,
+        path: relativePath
+      };
+    }
   }
   return null;
 }

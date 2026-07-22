@@ -1,5 +1,14 @@
 import React, { useState } from 'react';
-import { ChevronRight, ChevronDown, FileText, Folder, FolderOpen, BookOpen, CheckCircle } from 'lucide-react';
+import { 
+  ChevronRight, 
+  ChevronDown, 
+  FileText, 
+  FileCode, 
+  Folder, 
+  FolderOpen, 
+  BookOpen, 
+  CheckCircle 
+} from 'lucide-react';
 
 export type TreeNode = {
   type: 'directory' | 'file';
@@ -15,6 +24,13 @@ interface SidebarProps {
   onSelectFile: (path: string) => void;
   width?: number;
 }
+
+const getFileIcon = (fileName: string) => {
+  const ext = fileName.split('.').pop()?.toLowerCase();
+  if (ext === 'md') return <FileCode size={16} color="#60a5fa" />;
+  if (ext === 'txt') return <FileText size={16} color="#a78bfa" />;
+  return <FileText size={16} color="#94a3b8" />;
+};
 
 const TreeNodeItem: React.FC<{
   node: TreeNode;
@@ -47,7 +63,7 @@ const TreeNodeItem: React.FC<{
           {isDir ? (
             isOpen ? <FolderOpen size={16} /> : <Folder size={16} />
           ) : (
-            <FileText size={16} />
+            getFileIcon(node.name)
           )}
         </div>
         <span style={{ flex: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} title={node.name}>
